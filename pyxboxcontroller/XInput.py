@@ -53,6 +53,9 @@ def GetBatteryInformation(
         device_type,
         ctypes.byref(battery_state))
 
-# class XINPUT_VIBRATION(ctypes.Structure):
-#     _fields_ = [("wLeftMotorSpeed", ctypes.c_ushort),
-#                 ("wRightMotorSpeed", ctypes.c_ushort)]
+class XINPUT_VIBRATION(ctypes.Structure):
+    _fields_ = [("wLeftMotorSpeed", ctypes.c_ushort),
+                ("wRightMotorSpeed", ctypes.c_ushort)]
+
+def SetState(id: int, state: XINPUT_VIBRATION) -> Codes:
+    return XINPUT_DLL.XInputSetState(id, ctypes.byref(state))

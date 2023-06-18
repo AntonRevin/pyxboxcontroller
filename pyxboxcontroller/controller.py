@@ -8,6 +8,9 @@ http://msdn.microsoft.com/en-gb/library/windows/desktop/ee417001%28v=vs.85%29.as
 from functools import cache
 from enum import IntEnum
 
+from time import time
+from threading import Thread
+
 from pyxboxcontroller import XInput
 
 
@@ -256,6 +259,9 @@ class XboxController:
     The complete battery information can be gotten with:
     >>> battery_info: XboxBatteryInfo = my_controller.battery_info
 
+    A rumble command can be sent to the controller using (intensities as between 0 and 1, duration is in seconds):
+    >>> rumble(Tuple(left_intensity: float, right_intensity: float), duration: float)
+
     Raises a RuntimeError when communication with controller fails.
     """
 
@@ -344,3 +350,37 @@ class XboxController:
                     (f"Unknown error {xinput_response_code}"
                      f"attempting to {current_action} of device {self.id}"),
                     exc)
+
+    def __send_rumble_cmd(self, intensity: tuple) -> None:
+        """(private method) Send the rumble command to the controller.
+        intensity is a tuple(float) for the left & right rumble motors and is clamped 
+        between 0 and 1.0."""
+        left_intensity, right_intensity = intensity
+        if left_intensity   > 1.0: left_intensity   = 1.0
+        if right_intensity  > 1.0: right_intensity  = 1.0
+        if left_intensity   < 0.0: left_intensity   = 0.0
+        if right_intensity  < 0.0: right_intensity  = 0.0
+        rumble_cmd = XInput.XINPUT_VIBRATION()     
+
+        rumble_cmd.wLeftMotorSpeed = int(left_intensity * 65535)
+        rumble_cmd.wRightMotorSpeed = int(right_intensity * 65535)
+        result = XInput.SetState(self.id, rumble_cmd)
+
+        # Handle response from XInput
+        self.handle_response_code(result, current_action="set rumble intensity")
+
+    def __rumble_thread(self, intensity: tuple, length: float) -> None:
+        """(private method) Switches the rumble motors to the desired intensity,
+        and stops after the given time (in seconds).
+        This can be extended with easing functions to control the ramp-up/down of intensity"""
+        target = time() + length
+        self.__send_rumble_cmd(intensity)
+        while time() < target:
+            pass
+        self.__send_rumble_cmd((0,0))
+
+    def rumble(self, intensity: tuple, length: float) -> None:
+        """Tells the xbox controller to rumble at a given intensity for a desired duration.
+        intensity: <Tuple(float, float)> sets the power (0.0 to 1.0)
+        length: <float> sets the desired duration in seconds"""
+        Thread(target=self.__rumble_thread, args=(intensity,length)).start()
